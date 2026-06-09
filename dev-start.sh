@@ -18,3 +18,5 @@ echo "✅ Backend .env actualizado"
 echo ""
 echo "▶  Inicia el backend:  cd ~/clinic-system/backend && npm run dev"
 echo "▶  Inicia el frontend: cd ~/clinic-system/frontend && npm run dev"
+sed -i "s/^DB_HOST=.*/DB_HOST=$DB_IP/" ~/clinic-system/backend/.env
+sed -i "s/^DB_PORT=.*/DB_PORT=5433/" ~/clinic-system/backend/.env

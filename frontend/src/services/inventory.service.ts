@@ -4,6 +4,15 @@ const api = axios.create({
     baseURL: '/api',
 });
 
+// Attach token to every request automatically
+api.interceptors.request.use((config) => {
+  const token = sessionStorage.getItem('clinic_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export interface InventoryItem {
     id: string;
     name: string;
@@ -69,7 +78,7 @@ update: async (id: string, data: Partial<CreateItemData>): Promise<InventoryItem
 },
 
 delete: async (id: string): Promise<void> => {
-    await api.delete('/inventory/${id}');
+    await api.delete(`/inventory/${id}`);
 },
 
 recordTransaction: async(data: {

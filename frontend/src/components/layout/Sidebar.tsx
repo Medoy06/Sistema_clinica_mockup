@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { User } from '../../services/auth.service';
 
 interface NavItem {
   label: string;
@@ -14,12 +15,21 @@ const navItems: NavItem[] = [
   { label: 'Comunicaciones', path: '/comunicaciones', icon: '✉️' },
 ];
 
+const roleLabels: Record<string, string> = {
+  admin: 'Administrador',
+  doctor: 'Doctor',
+  recepcionista: 'Recepcionista',
+  enfermera: 'Enfermera',
+};
+
 interface SidebarProps {
   currentPath: string;
   onNavigate: (path: string) => void;
+  user: User;
+  onLogout: () => void;
 }
 
-export const Sidebar = ({ currentPath, onNavigate }: SidebarProps) => {
+export const Sidebar = ({ currentPath, onNavigate, user, onLogout }: SidebarProps) => {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -49,7 +59,9 @@ export const Sidebar = ({ currentPath, onNavigate }: SidebarProps) => {
             className={`
               w-full flex items-center gap-3 px-4 py-3 text-left
               transition-colors hover:bg-slate-700
-              ${currentPath === item.path ? 'bg-slate-700 border-r-2 border-blue-400' : ''}
+              ${currentPath === item.path
+                ? 'bg-slate-700 border-r-2 border-blue-400'
+                : ''}
             `}
           >
             <span className="text-xl">{item.icon}</span>
@@ -60,12 +72,33 @@ export const Sidebar = ({ currentPath, onNavigate }: SidebarProps) => {
         ))}
       </nav>
 
-      {/* Footer */}
-      {!collapsed && (
-        <div className="p-4 border-t border-slate-700 text-xs text-slate-400">
-          Sistema Clínica v1.0
-        </div>
-      )}
+      {/* User info and logout */}
+      <div className="border-t border-slate-700 p-4">
+        {!collapsed ? (
+          <div>
+            <p className="text-sm font-medium text-white truncate">
+              {user.full_name}
+            </p>
+            <p className="text-xs text-slate-400 mb-3">
+              {roleLabels[user.role]}
+            </p>
+            <button
+              onClick={onLogout}
+              className="w-full text-xs text-slate-400 hover:text-white hover:bg-slate-700 py-1.5 rounded transition-colors"
+            >
+              Cerrar sesión
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={onLogout}
+            className="w-full text-slate-400 hover:text-white transition-colors text-lg"
+            title="Cerrar sesión"
+          >
+            ↩
+          </button>
+        )}
+      </div>
     </aside>
   );
 };
