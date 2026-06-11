@@ -6,7 +6,7 @@ const api = axios.create({
 
 // Attach token to every request automatically
 api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem('clinic_token');
+  const token = localStorage.getItem('clinic_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -84,7 +84,7 @@ delete: async (id: string): Promise<void> => {
 recordTransaction: async(data: {
     item_id: string;
     transaction_type: 'purchase' | 'consumption' | 'adjustment' | 'return' | 'expired';
-    cuantity: number;
+    quantity: number;
     notes?: string;
     performed_by: string;
 }): Promise<InventoryItem> => {

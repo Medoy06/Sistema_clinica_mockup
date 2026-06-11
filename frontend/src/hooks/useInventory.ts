@@ -47,14 +47,30 @@ export const useInventory = () => {
     setLowStockItems(prev => prev.filter(item => item.id !== id));
   };
 
-  return {
-    items,
-    lowStockItems,
-    categories,
-    loading,
-    error,
-    refetch: fetchAll,
-    createItem,
-    deleteItem,
-  };
+  const updateItem = async (id: string, data: Partial<Parameters<typeof inventoryService.create>[0]>) => {
+  const updated = await inventoryService.update(id, data);
+  setItems(prev => prev.map(item => item.id === id ? updated : item));
+  await fetchAll();
+  return updated;
+};
+
+const addTransaction = async (data: Parameters<typeof inventoryService.recordTransaction>[0]) => {
+  const updated = await inventoryService.recordTransaction(data);
+  setItems(prev => prev.map(item => item.id === updated.id ? updated : item));
+  await fetchAll();
+  return updated;
+};
+
+return {
+  items,
+  lowStockItems,
+  categories,
+  loading,
+  error,
+  refetch: fetchAll,
+  createItem,
+  updateItem,
+  deleteItem,
+  addTransaction,
+};
 };

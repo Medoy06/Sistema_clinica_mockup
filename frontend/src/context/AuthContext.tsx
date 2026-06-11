@@ -19,8 +19,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const savedToken = sessionStorage.getItem('clinic_token');
-    const savedUser = sessionStorage.getItem('clinic_user');
+    const savedToken = localStorage.getItem('clinic_token');
+    const savedUser = localStorage.getItem('clinic_user');
     if (savedToken && savedUser) {
       setToken(savedToken);
       setUser(JSON.parse(savedUser));
@@ -32,15 +32,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const data = await authService.login(email, password);
     setToken(data.token);
     setUser(data.user);
-    sessionStorage.setItem('clinic_token', data.token);
-    sessionStorage.setItem('clinic_user', JSON.stringify(data.user));
+    localStorage.setItem('clinic_token', data.token);
+    localStorage.setItem('clinic_user', JSON.stringify(data.user));
   };
 
   const logout = () => {
     setToken(null);
     setUser(null);
-    sessionStorage.removeItem('clinic_token');
-    sessionStorage.removeItem('clinic_user');
+    localStorage.removeItem('clinic_token');
+    localStorage.removeItem('clinic_user');
   };
 
   return (

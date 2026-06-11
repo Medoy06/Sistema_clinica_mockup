@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import inventoryRoutes from './routes/inventory.routes';
 import authRoutes from './routes/auth.routes';
 import { authenticate } from './middleware/auth.middleware';
+import { errorHandler } from './middleware/error.middleware';
 
 dotenv.config();
 
@@ -23,6 +24,9 @@ app.use('/api/inventory', authenticate, inventoryRoutes);
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Clinic API is running' });
 });
+
+// Global error handler - must be last
+app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
