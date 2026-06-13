@@ -1,13 +1,30 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from './components/layout/Layout';
 import { InventoryPage } from './pages/inventory/InventoryPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { useAuth } from './context/AuthContext';
 import { AppointmentsPage } from './pages/appointments/AppointmentsPage';
+import { appointmentsService } from './services/appointments.service';
 
 function App() {
   const { user, token, logout, loading } = useAuth();
   const [currentPath, setCurrentPath] = useState('/inventario');
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user || !token) return;
+    const fetchNotifications = async () => {
+      try {
+        const notifs = await appointmentsService.getNotifications();
+        setUnreadCount(notifs.filter(n => !n.is_sent).length);
+      } catch {
+        // silent fail
+      }
+    };
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(interval);
+  }, [user, token]);
 
   if (loading) {
     return (
@@ -48,6 +65,7 @@ function App() {
       onNavigate={setCurrentPath}
       user={user}
       onLogout={logout}
+      unreadCount={unreadCount}
     >
       {renderPage()}
     </Layout>

@@ -7,9 +7,10 @@ interface LayoutProps {
   onNavigate: (path: string) => void;
   user: User;
   onLogout: () => void;
+  unreadCount: number;
 }
 
-export const Layout = ({ children, currentPath, onNavigate, user, onLogout }: LayoutProps) => {
+export const Layout = ({ children, currentPath, onNavigate, user, onLogout, unreadCount }: LayoutProps) => {
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden">
       <Sidebar
@@ -17,6 +18,7 @@ export const Layout = ({ children, currentPath, onNavigate, user, onLogout }: La
         onNavigate={onNavigate}
         user={user}
         onLogout={onLogout}
+        unreadCount={unreadCount}
       />
       <main className="flex-1 overflow-auto">
         {children}

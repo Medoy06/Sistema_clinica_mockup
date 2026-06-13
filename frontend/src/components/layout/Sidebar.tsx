@@ -27,9 +27,10 @@ interface SidebarProps {
   onNavigate: (path: string) => void;
   user: User;
   onLogout: () => void;
+  unreadCount: number;
 }
 
-export const Sidebar = ({ currentPath, onNavigate, user, onLogout }: SidebarProps) => {
+export const Sidebar = ({ currentPath, onNavigate, user, onLogout, unreadCount }: SidebarProps) => {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -54,21 +55,24 @@ export const Sidebar = ({ currentPath, onNavigate, user, onLogout }: SidebarProp
       <nav className="flex-1 py-4">
         {navItems.map(item => (
           <button
-            key={item.path}
-            onClick={() => onNavigate(item.path)}
-            className={`
-              w-full flex items-center gap-3 px-4 py-3 text-left
-              transition-colors hover:bg-slate-700
-              ${currentPath === item.path
-                ? 'bg-slate-700 border-r-2 border-blue-400'
-                : ''}
-            `}
-          >
-            <span className="text-xl">{item.icon}</span>
-            {!collapsed && (
-              <span className="text-sm font-medium">{item.label}</span>
-            )}
-          </button>
+  key={item.path}
+  onClick={() => onNavigate(item.path)}
+  className={`
+    w-full flex items-center gap-3 px-4 py-3 text-left
+    transition-colors hover:bg-slate-700
+    ${currentPath === item.path ? 'bg-slate-700 border-r-2 border-blue-400' : ''}
+  `}
+>
+  <span className="text-xl">{item.icon}</span>
+  {!collapsed && (
+    <span className="flex-1 text-sm font-medium">{item.label}</span>
+  )}
+  {!collapsed && item.path === '/citas' && unreadCount > 0 && (
+    <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+      {unreadCount}
+    </span>
+  )}
+</button>
         ))}
       </nav>
 
