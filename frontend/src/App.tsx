@@ -3,6 +3,7 @@ import { Layout } from './components/layout/Layout';
 import { InventoryPage } from './pages/inventory/InventoryPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { useAuth } from './context/AuthContext';
+import { AppointmentsPage } from './pages/appointments/AppointmentsPage';
 
 function App() {
   const { user, token, logout, loading } = useAuth();
@@ -24,6 +25,8 @@ function App() {
     switch (currentPath) {
       case '/inventario':
         return <InventoryPage />;
+      case '/citas':
+        return <AppointmentsPage />;
       default:
         return (
           <div className="flex items-center justify-center h-full">

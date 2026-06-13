@@ -32,6 +32,7 @@ export const createPatient = async (req: Request, res: Response) => {
     const patient = await AppointmentsModel.createPatient(req.body);
     res.status(201).json({ success: true, data: patient });
   } catch (error) {
+    console.error('CREATE PATIENT ERROR:', error);
     res.status(500).json({ success: false, message: 'Error al crear paciente.' });
   }
 };
@@ -119,6 +120,7 @@ export const createAppointment = async (req: Request, res: Response) => {
     });
     res.status(201).json({ success: true, data: appointment });
   } catch (error: any) {
+    console.error('CREATE APPOINTMENT ERROR:', error);
     if (error.message?.startsWith('CONFLICT:')) {
       return res.status(409).json({ success: false, message: error.message.replace('CONFLICT: ', '') });
     }

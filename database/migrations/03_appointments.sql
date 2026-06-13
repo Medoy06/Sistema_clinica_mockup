@@ -6,7 +6,7 @@ CREATE TYPE patient_status AS ENUM ('active', 'inactive');
 Create type appointment_status as enum
 ('scheduled', 
 'confirmed',
-'canceled',
+'cancelled',
 'completed',
 'no_show'
 );
@@ -17,7 +17,7 @@ CREATE TABLE patients (
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     identity_number VARCHAR(20) UNIQUE,
-    date_of_birth DATE NOT NULL,
+    date_of_birth DATE,
     gender VARCHAR(10) NOT NULL,
     phone VARCHAR(20),
     email VARCHAR(100),
