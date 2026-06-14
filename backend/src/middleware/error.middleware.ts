@@ -43,6 +43,14 @@ export const errorHandler = (
     });
   }
 
+  // Postgres invalid text representation (e.g. malformed UUID)
+  if ((err as any).code === '22P02') {
+    return res.status(400).json({
+      success: false,
+      message: 'Formato de dato inválido (ID o valor mal formado).',
+    });
+  }
+
   // Default
   res.status(500).json({
     success: false,

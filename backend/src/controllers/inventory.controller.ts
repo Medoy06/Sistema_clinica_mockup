@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import * as InventoryModel from '../models/inventory.model';
 
 export const getItems = async (req: Request, res: Response) => {
@@ -11,15 +11,15 @@ export const getItems = async (req: Request, res: Response) => {
   }
 };
 
-export const getItem = async (req: Request, res: Response) => {
+export const getItem = async (req: Request, res: Response, next: NextFunction) => {
   try {
-   const item = await InventoryModel.getItemById(req.params.id as string);;
+    const item = await InventoryModel.getItemById(req.params.id as string);
     if (!item) {
       return res.status(404).json({ success: false, message: 'Artículo no encontrado' });
     }
     res.json({ success: true, data: item });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al obtener artículo' });
+    next(error);
   }
 };
 
@@ -32,19 +32,19 @@ export const getLowStock = async (req: Request, res: Response) => {
   }
 };
 
-export const createItem = async (req: Request, res: Response) => {
+export const createItem = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { name, unit, quantity, min_quantity } = req.body;
     if (!name || !unit || quantity === undefined || min_quantity === undefined) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Campos requeridos: nombre, unidad, cantidad, cantidad mínima' 
+      return res.status(400).json({
+        success: false,
+        message: 'Campos requeridos: nombre, unidad, cantidad, cantidad mínima'
       });
     }
     const item = await InventoryModel.createItem(req.body);
     res.status(201).json({ success: true, data: item });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al crear artículo' });
+    next(error);
   }
 };
 
