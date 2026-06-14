@@ -85,6 +85,31 @@ export interface CreateAppointmentData {
   reason?: string;
 }
 
+export interface MedicalRecord {
+  id: string;
+  patient_id: string;
+  doctor_id: string;
+  appointment_id?: string;
+  visit_date: string;
+  diagnosis?: string;
+  treatment?: string;
+  prescription?: string;
+  notes?: string;
+  doctor_name?: string;
+  specialty?: string;
+  created_at: string;
+}
+
+export interface CreateMedicalRecordData {
+  patient_id: string;
+  doctor_id: string;
+  appointment_id?: string;
+  diagnosis?: string;
+  treatment?: string;
+  prescription?: string;
+  notes?: string;
+}
+
 export const appointmentsService = {
   // Patients
   getPatients: async (): Promise<Patient[]> => {
@@ -142,5 +167,26 @@ export const appointmentsService = {
   markNotificationRead: async (id: string): Promise<void> => {
     await api.patch(`/appointments/notifications/${id}/read`);
   },
+
+  // Medical Records
+  getPatient: async (id: string): Promise<Patient> => {
+  const res = await api.get(`/appointments/patients/${id}`);
+  return res.data.data;
+},
+
+getMedicalRecords: async (patientId: string): Promise<MedicalRecord[]> => {
+  const res = await api.get(`/appointments/patients/${patientId}/medical-records`);
+  return res.data.data;
+},
+
+createMedicalRecord: async (data: CreateMedicalRecordData): Promise<MedicalRecord> => {
+  const res = await api.post('/appointments/medical-records', data);
+  return res.data.data;
+},
+
+getPatientHistory: async (patientId: string): Promise<Appointment[]> => {
+  const res = await api.get(`/appointments/patients/${patientId}/history`);
+  return res.data.data;
+},
 };
 

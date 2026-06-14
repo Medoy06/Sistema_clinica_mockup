@@ -163,3 +163,41 @@ export const markRead = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: 'Error al actualizar notificación.' });
   }
 };
+
+// ── MEDICAL RECORDS ───────────────────────────────────────────────────────────
+
+export const getMedicalRecords = async (req: Request, res: Response) => {
+  try {
+    const records = await AppointmentsModel.getPatientMedicalRecords(req.params.id as string);
+    res.json({ success: true, data: records });
+  } catch (error) {
+    console.error('GET MEDICAL RECORDS ERROR:', error);
+    res.status(500).json({ success: false, message: 'Error al obtener historial médico.' });
+  }
+};
+
+export const createMedicalRecord = async (req: Request, res: Response) => {
+  try {
+    const { patient_id, doctor_id } = req.body;
+    if (!patient_id || !doctor_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Paciente y médico son requeridos.'
+      });
+    }
+    const record = await AppointmentsModel.createMedicalRecord(req.body);
+    res.status(201).json({ success: true, data: record });
+  } catch (error) {
+    console.error('CREATE MEDICAL RECORD ERROR:', error);
+    res.status(500).json({ success: false, message: 'Error al crear registro médico.' });
+  }
+};
+
+export const getAppointmentHistory = async (req: Request, res: Response) => {
+  try {
+    const history = await AppointmentsModel.getPatientAppointmentHistory(req.params.id as string);
+    res.json({ success: true, data: history });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error al obtener historial de citas.' });
+  }
+};

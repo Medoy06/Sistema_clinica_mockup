@@ -50,6 +50,19 @@ export interface Appointment {
   specialty?: string;
 }
 
+export interface MedicalRecord {
+  id: string;
+  patient_id: string;
+  doctor_id: string;
+  appointment_id?: string;
+  visit_date: string;
+  diagnosis?: string;
+  treatment?: string;
+  prescriptions?: string;
+  notes?: string;
+  created_at: string;
+}
+
 // ── PATIENTS ──────────────────────────────────────────────────────────────────
 
 export const getAllPatients = async () => {
@@ -293,4 +306,58 @@ export const markNotificationRead = async (id: string) => {
     `UPDATE appointment_notifications SET is_sent = true WHERE id = $1`,
     [id]
   );
+};
+
+// ── MEDICAL RECORDS ───────────────────────────────────────────────────────────
+
+export const getPatientMedicalRecords = async (patientId: string) => {
+  const result = await pool.query(`
+    SELECT 
+      m.*,
+      u.full_name as doctor_name,
+      d.specialty
+    FROM medical_records m
+    JOIN doctors d ON m.doctor_id = d.id
+    JOIN users u ON d.user_id = u.id
+    WHERE m.patient_id = $1
+    ORDER BY m.visit_date DESC
+  `, [patientId]);
+  return result.rows;
+};
+
+export const createMedicalRecord = async (data: {
+  patient_id: string;
+  doctor_id: string;
+  appointment_id?: string;
+  diagnosis?: string;
+  treatment?: string;
+  prescription?: string;
+  notes?: string;
+}) => {
+  const result = await pool.query(`
+    INSERT INTO medical_records (
+      patient_id, doctor_id, appointment_id,
+      diagnosis, treatment, prescription, notes
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7)
+    RETURNING *
+  `, [
+    data.patient_id, data.doctor_id, data.appointment_id,
+    data.diagnosis, data.treatment, data.prescription, data.notes
+  ]);
+  return result.rows[0];
+};
+
+export const getPatientAppointmentHistory = async (patientId: string) => {
+  const result = await pool.query(`
+    SELECT 
+      a.*,
+      u.full_name as doctor_name,
+      d.specialty
+    FROM appointments a
+    JOIN doctors d ON a.doctor_id = d.id
+    JOIN users u ON d.user_id = u.id
+    WHERE a.patient_id = $1
+    ORDER BY a.scheduled_at DESC
+  `, [patientId]);
+  return result.rows;
 };

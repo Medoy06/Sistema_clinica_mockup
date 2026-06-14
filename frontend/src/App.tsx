@@ -5,10 +5,13 @@ import { LoginPage } from './pages/auth/LoginPage';
 import { useAuth } from './context/AuthContext';
 import { AppointmentsPage } from './pages/appointments/AppointmentsPage';
 import { appointmentsService } from './services/appointments.service';
+import { PatientsPage } from './pages/patients/PatientsPage';
+import { PatientProfilePage } from './pages/patients/PatientProfilePage';
 
 function App() {
   const { user, token, logout, loading } = useAuth();
   const [currentPath, setCurrentPath] = useState('/inventario');
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -40,6 +43,16 @@ function App() {
 
   const renderPage = () => {
     switch (currentPath) {
+      case '/pacientes':
+  if (selectedPatientId) {
+    return (
+      <PatientProfilePage
+        patientId={selectedPatientId}
+        onBack={() => setSelectedPatientId(null)}
+      />
+    );
+  }
+  return <PatientsPage onSelectPatient={setSelectedPatientId} />;
       case '/inventario':
         return <InventoryPage />;
       case '/citas':
@@ -62,7 +75,10 @@ function App() {
   return (
     <Layout
       currentPath={currentPath}
-      onNavigate={setCurrentPath}
+      onNavigate={(path: string) => {
+  setSelectedPatientId(null);
+  setCurrentPath(path);
+}}
       user={user}
       onLogout={logout}
       unreadCount={unreadCount}
