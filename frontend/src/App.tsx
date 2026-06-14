@@ -7,6 +7,8 @@ import { AppointmentsPage } from './pages/appointments/AppointmentsPage';
 import { appointmentsService } from './services/appointments.service';
 import { PatientsPage } from './pages/patients/PatientsPage';
 import { PatientProfilePage } from './pages/patients/PatientProfilePage';
+import { DashboardPage } from './pages/dashboard/DashboardPage';
+import { ComunicacionesPage } from './pages/communications/ComunicacionesPage';
 
 function App() {
   const { user, token, logout, loading } = useAuth();
@@ -41,44 +43,48 @@ function App() {
     return <LoginPage />;
   }
 
-  const renderPage = () => {
-    switch (currentPath) {
-      case '/pacientes':
-  if (selectedPatientId) {
-    return (
-      <PatientProfilePage
-        patientId={selectedPatientId}
-        onBack={() => setSelectedPatientId(null)}
-      />
-    );
-  }
-  return <PatientsPage onSelectPatient={setSelectedPatientId} />;
-      case '/inventario':
-        return <InventoryPage />;
-      case '/citas':
-        return <AppointmentsPage />;
-      default:
+ const renderPage = () => {
+  switch (currentPath) {
+    case '/':
+      return <DashboardPage onNavigate={setCurrentPath} />;
+    case '/pacientes':
+      if (selectedPatientId) {
         return (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center text-slate-400">
-              <p className="text-6xl mb-4">🏥</p>
-              <p className="text-xl font-medium">
-                Bienvenido, {user.full_name}
-              </p>
-              <p className="text-sm mt-2">Seleccione una opción del menú</p>
-            </div>
-          </div>
+          <PatientProfilePage
+            patientId={selectedPatientId}
+            onBack={() => setSelectedPatientId(null)}
+          />
         );
-    }
-  };
+      }
+      return <PatientsPage onSelectPatient={setSelectedPatientId} />;
+    case '/inventario':
+      return <InventoryPage />;
+    case '/citas':
+      return <AppointmentsPage />;
+    case '/comunicaciones':
+      return <ComunicacionesPage />;
+    default:
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center text-slate-400">
+            <p className="text-6xl mb-4">🏥</p>
+            <p className="text-xl font-medium">
+              Bienvenido, {user.full_name}
+            </p>
+            <p className="text-sm mt-2">Seleccione una opción del menú</p>
+          </div>
+        </div>
+      );
+  }
+};
 
-  return (
+return (
     <Layout
       currentPath={currentPath}
       onNavigate={(path: string) => {
-  setSelectedPatientId(null);
-  setCurrentPath(path);
-}}
+        setSelectedPatientId(null);
+        setCurrentPath(path);
+      }}
       user={user}
       onLogout={logout}
       unreadCount={unreadCount}
