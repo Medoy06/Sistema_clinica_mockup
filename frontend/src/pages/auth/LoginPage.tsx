@@ -9,20 +9,21 @@ export const LoginPage = () => {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      setError('Por favor ingrese su correo y contraseña.');
-      return;
-    }
-    try {
-      setLoading(true);
-      setError('');
-      await login(email, password);
-    } catch (err) {
-      setError('Credenciales incorrectas. Intente de nuevo.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (!email || !password) {
+    setError('Por favor ingrese su correo y contraseña.');
+    return;
+  }
+  try {
+    setLoading(true);
+    setError('');
+    await login(email, password);
+  } catch (err: any) {
+    const message = err?.response?.data?.message;
+    setError(message || 'Error al iniciar sesión. Intente de nuevo.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleLogin();
