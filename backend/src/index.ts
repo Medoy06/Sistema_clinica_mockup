@@ -8,7 +8,7 @@ import authRoutes from './routes/auth.routes';
 import { authenticate } from './middleware/auth.middleware';
 import { errorHandler } from './middleware/error.middleware';
 import appointmentsRoutes from './routes/appointments.routes';
-
+import posRoutes from './routes/pos.routes';
 
 dotenv.config();
 
@@ -58,6 +58,7 @@ app.use('/api/auth', authRoutes);
 // Protected routes
 app.use('/api/inventory', authenticate, inventoryRoutes);
 app.use('/api/appointments', authenticate, appointmentsRoutes);
+app.use('/api/pos', authenticate, posRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

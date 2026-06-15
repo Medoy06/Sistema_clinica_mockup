@@ -1,13 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import * as InventoryModel from '../models/inventory.model';
 
-export const getItems = async (req: Request, res: Response) => {
+export const getItems = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const items = await InventoryModel.getAllItems();
     res.json({ success: true, data: items });
   } catch (error) {
-    console.error('GET ITEMS ERROR:', error);
-    res.status(500).json({ success: false, message: 'Error al obtener inventario' });
+    next(error);
   }
 };
 
@@ -23,24 +22,18 @@ export const getItem = async (req: Request, res: Response, next: NextFunction) =
   }
 };
 
-export const getLowStock = async (req: Request, res: Response) => {
+export const getLowStock = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const items = await InventoryModel.getLowStockItems();
     res.json({ success: true, data: items });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al obtener artículos con bajo stock' });
+    next(error);
   }
 };
 
+// Validation handled by Zod (CreateItemSchema) at the route layer.
 export const createItem = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, unit, quantity, min_quantity } = req.body;
-    if (!name || !unit || quantity === undefined || min_quantity === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: 'Campos requeridos: nombre, unidad, cantidad, cantidad mínima'
-      });
-    }
     const item = await InventoryModel.createItem(req.body);
     res.status(201).json({ success: true, data: item });
   } catch (error) {
@@ -48,7 +41,7 @@ export const createItem = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-export const updateItem = async (req: Request, res: Response) => {
+export const updateItem = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const item = await InventoryModel.updateItem(req.params.id as string, req.body);
     if (!item) {
@@ -56,59 +49,73 @@ export const updateItem = async (req: Request, res: Response) => {
     }
     res.json({ success: true, data: item });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al actualizar artículo' });
+    next(error);
   }
 };
 
-export const deleteItem = async (req: Request, res: Response) => {
+export const deleteItem = async (req: Request, res: Response, next: NextFunction) => {
   try {
     await InventoryModel.deleteItem(req.params.id as string);
     res.json({ success: true, message: 'Artículo desactivado correctamente' });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al eliminar artículo' });
+    next(error);
   }
 };
 
-export const addTransaction = async (req: Request, res: Response) => {
+// --- LOTS ---
+export const getLots = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { item_id, transaction_type, quantity, performed_by } = req.body;
-    if (!item_id || !transaction_type || !quantity || !performed_by) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Campos requeridos: item_id, tipo, cantidad, realizado_por' 
-      });
-    }
-    const item = await InventoryModel.recordTransaction(req.body);
-    res.json({ success: true, data: item });
+    const lots = await InventoryModel.getLotsByItem(req.params.id as string);
+    res.json({ success: true, data: lots });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al registrar transacción' });
+    next(error);
   }
 };
 
-export const getTransactions = async (req: Request, res: Response) => {
+// Validation handled by Zod (CreateLotSchema) at the route layer.
+export const createLot = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const lot = await InventoryModel.createLot(req.body);
+    res.status(201).json({ success: true, data: lot });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// --- TRANSACTIONS ---
+// Validation handled by Zod (TransactionSchema) at the route layer.
+export const addTransaction = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await InventoryModel.recordTransaction(req.body);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getTransactions = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const transactions = await InventoryModel.getItemTransactions(req.params.id as string);
     res.json({ success: true, data: transactions });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al obtener transacciones' });
+    next(error);
   }
 };
 
-export const getCategories = async (req: Request, res: Response) => {
+export const getCategories = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const categories = await InventoryModel.getAllCategories();
     res.json({ success: true, data: categories });
   } catch (error) {
-    console.error('DB ERROR:', error);
-    res.status(500).json({ success: false, message: 'Error al obtener categorías' });
+    next(error);
   }
 };
 
-export const getSuppliers = async (req: Request, res: Response) => {
+export const getSuppliers = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const suppliers = await InventoryModel.getAllSuppliers();
     res.json({ success: true, data: suppliers });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al obtener proveedores' });
+    next(error);
   }
 };
