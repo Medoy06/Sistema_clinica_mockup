@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import * as AppointmentsModel from '../models/appointments.model';
 
 // ── PATIENTS ──────────────────────────────────────────────────────────────────
@@ -37,13 +37,13 @@ export const createPatient = async (req: Request, res: Response) => {
   }
 };
 
-export const updatePatient = async (req: Request, res: Response) => {
+export const updatePatient = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const patient = await AppointmentsModel.updatePatient(req.params.id as string, req.body);
     if (!patient) return res.status(404).json({ success: false, message: 'Paciente no encontrado.' });
     res.json({ success: true, data: patient });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al actualizar paciente.' });
+    next(error);
   }
 };
 

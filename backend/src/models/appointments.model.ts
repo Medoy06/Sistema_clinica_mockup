@@ -100,14 +100,31 @@ export const createPatient = async (data: Partial<Patient>) => {
 };
 
 export const updatePatient = async (id: string, data: Partial<Patient>) => {
-  const fields = Object.keys(data)
-    .map((key, i) => `${key} = $${i + 2}`)
-    .join(', ');
-  const values = Object.values(data);
+  // Whitelist — only these fields may ever be updated via this endpoint.
+  // Anything else the client sends (status, id, created_at, etc.) is ignored.
+  const allowedFields = [
+    'first_name', 'last_name', 'identity_number', 'date_of_birth',
+    'gender', 'phone', 'email', 'address', 'blood_type', 'allergies',
+    'emergency_contact_name', 'emergency_contact_phone',
+  ];
+
+  // Keep only whitelisted keys that were actually provided
+  const entries = Object.entries(data).filter(([key]) => allowedFields.includes(key));
+
+  if (entries.length === 0) {
+    // Nothing valid to update — return the existing record unchanged
+    const existing = await pool.query('SELECT * FROM patients WHERE id = $1', [id]);
+    return existing.rows[0] || null;
+  }
+
+  const fields = entries.map(([key], i) => `${key} = $${i + 2}`).join(', ');
+  const values = entries.map(([, value]) => value);
+
   const result = await pool.query(`
     UPDATE patients SET ${fields}, updated_at = NOW()
     WHERE id = $1 RETURNING *
   `, [id, ...values]);
+
   return result.rows[0] || null;
 };
 

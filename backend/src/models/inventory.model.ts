@@ -102,10 +102,24 @@ export const createItem = async (data: CreateItemDTO) => {
 };
 
 export const updateItem = async (id: string, data: Partial<CreateItemDTO>) => {
-  const fields = Object.keys(data)
-    .map((key, index) => `${key} = $${index + 2}`)
-    .join(', ');
-  const values = Object.values(data);
+  // Whitelist — only these item attributes may be edited here.
+  // Excludes: id, created_at, updated_at (never editable),
+  //   is_active (soft-delete, handled by deleteItem),
+  //   quantity (stock changes ONLY via recordTransaction, to preserve the audit trail).
+  const allowedFields = [
+    'name', 'description', 'category_id', 'supplier_id', 'unit',
+    'min_quantity', 'max_quantity', 'unit_price', 'location', 'expiry_date',
+  ];
+
+  const entries = Object.entries(data).filter(([key]) => allowedFields.includes(key));
+
+  if (entries.length === 0) {
+    const existing = await pool.query('SELECT * FROM inventory_items WHERE id = $1', [id]);
+    return existing.rows[0] || null;
+  }
+
+  const fields = entries.map(([key], i) => `${key} = $${i + 2}`).join(', ');
+  const values = entries.map(([, value]) => value);
 
   const result = await pool.query(`
     UPDATE inventory_items
@@ -113,6 +127,7 @@ export const updateItem = async (id: string, data: Partial<CreateItemDTO>) => {
     WHERE id = $1
     RETURNING *
   `, [id, ...values]);
+
   return result.rows[0] || null;
 };
 
