@@ -32,13 +32,21 @@ export const useInventory = () => {
     fetchAll();
   }, [fetchAll]);
 
+  // Create a product (identity only). A newly created product has no lots
+  // yet, so we refetch to keep computed totals/low-stock consistent.
   const createItem = async (data: Parameters<typeof inventoryService.create>[0]) => {
     const newItem = await inventoryService.create(data);
-    setItems(prev => [...prev, newItem]);
-    if (newItem.quantity <= newItem.min_quantity) {
-      setLowStockItems(prev => [...prev, newItem]);
-    }
+    await fetchAll();
     return newItem;
+  };
+
+  const updateItem = async (
+    id: string,
+    data: Partial<Parameters<typeof inventoryService.create>[0]>
+  ) => {
+    const updated = await inventoryService.update(id, data);
+    await fetchAll();
+    return updated;
   };
 
   const deleteItem = async (id: string) => {
@@ -47,30 +55,40 @@ export const useInventory = () => {
     setLowStockItems(prev => prev.filter(item => item.id !== id));
   };
 
-  const updateItem = async (id: string, data: Partial<Parameters<typeof inventoryService.create>[0]>) => {
-  const updated = await inventoryService.update(id, data);
-  setItems(prev => prev.map(item => item.id === id ? updated : item));
-  await fetchAll();
-  return updated;
-};
+  // --- Lots ---
+  const getLots = async (itemId: string) => {
+    return inventoryService.getLots(itemId);
+  };
 
-const addTransaction = async (data: Parameters<typeof inventoryService.recordTransaction>[0]) => {
-  const updated = await inventoryService.recordTransaction(data);
-  setItems(prev => prev.map(item => item.id === updated.id ? updated : item));
-  await fetchAll();
-  return updated;
-};
+  // Adding a lot changes a product's computed stock, so refetch after.
+  const createLot = async (data: Parameters<typeof inventoryService.createLot>[0]) => {
+    const lot = await inventoryService.createLot(data);
+    await fetchAll();
+    return lot;
+  };
 
-return {
-  items,
-  lowStockItems,
-  categories,
-  loading,
-  error,
-  refetch: fetchAll,
-  createItem,
-  updateItem,
-  deleteItem,
-  addTransaction,
-};
+  // A movement targets a lot and returns the updated LOT (not the item).
+  // Stock totals change, so refetch to refresh the item list.
+  const addTransaction = async (
+    data: Parameters<typeof inventoryService.recordTransaction>[0]
+  ) => {
+    const lot = await inventoryService.recordTransaction(data);
+    await fetchAll();
+    return lot;
+  };
+
+  return {
+    items,
+    lowStockItems,
+    categories,
+    loading,
+    error,
+    refetch: fetchAll,
+    createItem,
+    updateItem,
+    deleteItem,
+    getLots,
+    createLot,
+    addTransaction,
+  };
 };

@@ -180,38 +180,98 @@ SET status = $2, cancelled_by = $3, cancellation_reason = $4, notes = COALESCE($
 ```
 This is explicit-column and parameterized, so it's **safe** — but `cancelled_by`/`cancellation_reason` get set (likely to `NULL`) even when the new status is `confirmed` or `completed`, not just `cancelled`. Currently harmless since the frontend only sends those fields on actual cancellation, but worth tightening — e.g. only include those columns in the SET when `status === 'cancelled'` — so the function's behavior matches its name regardless of what the frontend sends.
 
-### 15. Inventory FRONTEND not yet lot-aware (DEFERRED — must fix)
-**Status:** 🔧 Deferred — backend done, frontend broken until addressed
+15. Inventory FRONTEND lot-awareness — RESOLVED this session
 
-The lot restructure (migration 05) changed the backend completely but the
-Inventario frontend still assumes the old flat shape:
-- Create-item form still sends `quantity`/`expiry_date` (now rejected/ignored)
-- No lot UI exists: no create-lot form, no per-product lot list, no FEFO display
-- Item list reads `quantity` — still works (it's now computed server-side) but
-  there's no way to ADD stock from the UI anymore (stock = lots, lots have no UI)
+Status: ✅ Done (was deferred during POS build, now fixed)
 
-Planned to be built together with the POS lot-picker (shared component) rather
-than twice. Until then the Inventario page can view products but not manage stock.
+The lot restructure broke the Inventario page (it spoke the old flat shape).
+Rebuilt fully: service/hook updated, one-step create (product → initial lot),
+new LotsModal (view/add lots), lot-aware TransactionModal (pick a lot, guards
+no-lots case), edit fixed for numeric-string coercion. Move to Resolved.
 
-### 16. Lot expiry date display offset (UTC-6)
-**Status:** 💡 Idea — cosmetic, fix at UI build time
 
-`date` columns return as `...T06:00:00.000Z` (local midnight rendered in UTC-6).
-Harmless in storage/queries. But when displaying lot expiry in the UI, format the
-date portion only — do NOT pass through anything timezone-shifting. Same family as
-the banned `.toISOString().split('T')[0]` trap. Format from the `YYYY-MM-DD` part
-directly.
+16. Lot expiry date display offset (UTC-6)
 
-### 17. recordTransaction / createLot hardening (deferred)
-**Status:** 💡 Idea — not exploitable in normal flow, harden later
-- `recordTransaction` doesn't verify the passed `lot_id` actually belongs to the
-  passed `item_id` — a mismatched pair would update the wrong lot's stock. Add a
-  guard (check lot.item_id === item_id) before the update.
-- `createLot` and the createLot-internal transaction hardcode `performed_by: 'system'`.
-  Should pass the authenticated user (req.user) from the controller down, like the
-  other audited operations.
- 
----
+Status: ✅ Handled via convention — keep in mind for new UI
+
+date columns return as ...T06:00:00.000Z (local midnight in UTC-6). Solution
+applied: display date-only via .slice(0,10) — never pass through timezone-
+shifting logic. Same family as the banned .toISOString().split('T')[0]. Any
+NEW place that displays a lot/expiry date must follow this.
+
+
+17. recordTransaction / lot hardening
+
+Status: 🔧 Partially done — one item remains
+
+DONE: negative-stock guard added (subtraction movements lock the lot with
+FOR UPDATE, verify sufficient quantity, reject via StockError→400).
+performed_by now server-injected.
+REMAINING: recordTransaction still doesn't verify the passed lot_id
+actually belongs to the passed item_id. Not exploitable in normal UI flow
+(the modal only offers that item's lots), but a hand-crafted request could
+pass a mismatched pair. Add a guard (lot.item_id === item_id) when hardening.
+Also: zero-quantity lots are never deactivated/swept — they accumulate. FEFO
+correctly skips them (quantity > 0), so cosmetic, but consider an
+auto-deactivate or periodic sweep.
+
+
+18. Role-based access control pass — nav + routes (COMMITTED, not optional)
+
+Status: 📐 Planned — Isaac confirmed this WILL happen, as one coordinated pass
+
+Currently neither the sidebar nav nor most module routes are role-gated.
+Must be done across BOTH layers — a hidden menu item is NOT security:
+
+FRONTEND (cosmetic/UX): add roles?: string[] to Sidebar NavItem; filter
+navItems by user.role. Hide POS/Inventario from purely clinical roles, etc.
+
+BACKEND (actual enforcement): apply authorize(...) middleware per module
+route group. A hidden link still leaves the endpoint callable.
+
+
+POS (/api/pos): admin + recepcionista (cashier). NOT doctor/enfermera.
+Map the four roles (admin/doctor/recepcionista/enfermera) to module access
+deliberately — may need client input on who-does-what.
+
+
+Do as ONE pass for consistency, not piecemeal per module.
+
+
+19. Clearing a category on edit doesn't persist (PINNED)
+
+Status: 🔧 Known bug, low priority — pinned, move on
+
+Editing a product and clearing its category "succeeds" but reverts to the
+previous category on reload. Setting/changing works; only clearing to empty
+fails. Attempted fix (didn't fully resolve): UpdateItemSchema uses nullableUuid
+(""→null); model update filter drops undefined but keeps null; frontend sends
+category_id: form.category_id || null. Something still isn't writing NULL —
+re-check F12 payload to see if null actually reaches the backend or gets
+stripped (possible Zod .partial()/.extend() interaction, or the select value
+arriving as "" and the preprocessor producing null but the model still not
+including it). Impact: minor — reassigning categories works; only
+un-categorizing is stuck.
+
+
+20. POS receipt display (next-task candidate)
+
+Status: 💡 Idea — lastSale is captured but unused
+
+PosPage.tsx stores the completed sale in lastSale state but renders nothing.
+Either build a receipt view/modal (consume lastSale — show lines, lots, ISV
+breakdown, payment, change) or remove the dead state. Natural lead-in to the
+eventual ESC/POS thermal printing (blocked on printer model).
+
+
+21. Corte de Caja (shift reconciliation)
+
+Status: 💡 Idea — deferred, needs a shift/drawer concept
+
+payments table supports it (GROUP BY method, SUM over a time window), but a
+real Corte ties to an explicit shift (open drawer → close drawer). Needs its
+own table/concept. Must match the client's existing report format. Build when
+the reporting layer is tackled.
  
 ## Resolved
  
@@ -242,3 +302,19 @@ Was destructured but never used. Removed deliberately rather than left as a plac
  
 ### ✅ Category required validation on inventory creation
 Initially looked like a bug (empty `category_id` → "Categoría inválida" error), but on discussion this is correct behavior — category is intentionally required. No fix needed, just confirmed as intentional.
+
+### ✅ Lot-based inventory restructure + Pharmacy POS core (June 17–19, 2026)
+
+Replaced flat per-product stock with per-lot tracking (migration 05): each lot
+has its own expiry + cost; product total is computed (SUM of lots), never
+stored. Built the POS data layer (migration 06: sales/sale_items/payments) and
+the is_exempt flag (07). POS sale engine: atomic createSale with server-side
+FEFO multi-lot splitting, FOR UPDATE oversell protection, per-line ISV,
+SaleError→400 on insufficient stock/underpayment, in-memory receipt (no
+post-commit read-back — fixed a bug where a committed sale could report failure
+via a stale read query using a nonexistent u.name column). Verified end-to-end
+incl. both rollback paths. POS cashier frontend (PosPage + CheckoutModal) and a
+fully lot-aware Inventario rebuild. Fiscal columns are SHAPE-ONLY, blocked on
+client CAI. Several bugs squashed along the way: StrictMode double-toast
+(side-effect in setState updater), negative stock (no floor check on
+subtraction), numeric-string coercion on edit, empty-string UUID rejection.

@@ -1,5 +1,14 @@
 import pool from '../config/db';
 
+// Thrown for business-rule violations (e.g. insufficient lot stock) so the
+// controller can return a clean 400 instead of a generic 500.
+export class StockError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StockError';
+  }
+}
+
 // --- TYPES ---
 export interface InventoryItem {
   id: string;
@@ -143,7 +152,12 @@ export const updateItem = async (id: string, data: Partial<CreateItemDTO>) => {
     'min_quantity', 'max_quantity', 'unit_price', 'location',
   ];
 
-  const entries = Object.entries(data).filter(([key]) => allowedFields.includes(key));
+  // Include a field only if it's whitelisted AND actually provided.
+  // undefined = "not provided, leave alone" → excluded.
+  // null = "deliberately clear" → included (writes NULL).
+  const entries = Object.entries(data).filter(
+    ([key, value]) => allowedFields.includes(key) && value !== undefined
+  );
 
   if (entries.length === 0) {
     const existing = await pool.query('SELECT * FROM inventory_items WHERE id = $1', [id]);
@@ -227,15 +241,35 @@ export const recordTransaction = async (data: StockTransactionDTO) => {
   try {
     await client.query('BEGIN');
 
+    const isAddition =
+      data.transaction_type === 'purchase' || data.transaction_type === 'return';
+    const operator = isAddition ? '+' : '-';
+
+    // For subtractions, lock the lot and verify it holds enough stock.
+    // Without this, a movement could drive a lot negative (e.g. removing
+    // 300 from a lot of 5). FOR UPDATE prevents a concurrent movement from
+    // changing the quantity between our check and our update.
+    if (!isAddition) {
+      const lotRes = await client.query(
+        `SELECT quantity FROM inventory_lots WHERE id = $1 FOR UPDATE`,
+        [data.lot_id]
+      );
+      const lot = lotRes.rows[0];
+      if (!lot) {
+        throw new StockError('Lote no encontrado.');
+      }
+      if (Number(lot.quantity) < Number(data.quantity)) {
+        throw new StockError(
+          `Stock insuficiente en el lote. Disponible: ${Number(lot.quantity)}.`
+        );
+      }
+    }
+
     await client.query(`
       INSERT INTO inventory_transactions (
         item_id, lot_id, transaction_type, quantity, notes, performed_by
       ) VALUES ($1, $2, $3, $4, $5, $6)
     `, [data.item_id, data.lot_id, data.transaction_type, data.quantity, data.notes, data.performed_by]);
-
-    const operator =
-      data.transaction_type === 'purchase' || data.transaction_type === 'return'
-        ? '+' : '-';
 
     const result = await client.query(`
       UPDATE inventory_lots

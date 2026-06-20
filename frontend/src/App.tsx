@@ -9,6 +9,7 @@ import { PatientsPage } from './pages/patients/PatientsPage';
 import { PatientProfilePage } from './pages/patients/PatientProfilePage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { ComunicacionesPage } from './pages/communications/ComunicacionesPage';
+import { PosPage } from './pages/pos/PosPage';
 
 function App() {
   const { user, token, logout, loading } = useAuth();
@@ -75,6 +76,8 @@ function App() {
           </div>
         </div>
       );
+      case '/pos':
+      return <PosPage />;
   }
 };
 

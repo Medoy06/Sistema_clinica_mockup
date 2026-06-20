@@ -43,10 +43,22 @@ export const EditItemModal = ({
 
   if (!item) return null;
 
-  const handleSave = async () => {
+ const handleSave = async () => {
     try {
       setSubmitting(true);
-      await onSave(item.id, form);
+      // Coerce numeric fields (numeric columns arrive as strings) and convert
+      // empty optional strings to undefined (Zod .uuid().optional() rejects "").
+      const payload = {
+        name: form.name,
+        description: form.description || undefined,
+        category_id: form.category_id || undefined,
+        unit: form.unit,
+        min_quantity: Number(form.min_quantity),
+        max_quantity: form.max_quantity ? Number(form.max_quantity) : undefined,
+        unit_price: form.unit_price ? Number(form.unit_price) : undefined,
+        location: form.location || undefined,
+      };
+      await onSave(item.id, payload);
       onClose();
     } finally {
       setSubmitting(false);

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import * as InventoryModel from '../models/inventory.model';
+import { StockError } from '../models/inventory.model';
 
 export const getItems = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -84,11 +85,16 @@ export const createLot = async (req: Request, res: Response, next: NextFunction)
 
 // --- TRANSACTIONS ---
 // Validation handled by Zod (TransactionSchema) at the route layer.
+// performed_by is injected from the authenticated user, never the client.
 export const addTransaction = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await InventoryModel.recordTransaction(req.body);
+    const performed_by = req.user!.userId;
+    const result = await InventoryModel.recordTransaction({ ...req.body, performed_by });
     res.json({ success: true, data: result });
   } catch (error) {
+    if (error instanceof StockError) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     next(error);
   }
 };
