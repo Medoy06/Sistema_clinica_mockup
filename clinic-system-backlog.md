@@ -272,7 +272,163 @@ payments table supports it (GROUP BY method, SUM over a time window), but a
 real Corte ties to an explicit shift (open drawer → close drawer). Needs its
 own table/concept. Must match the client's existing report format. Build when
 the reporting layer is tackled.
+
+22. Multi-role / capability-preset upgrade path (future)
+
+Status: 💡 Idea — architecture note, not needed yet
+
+Current RBAC is single-role: user.role is one value, PERMISSIONS maps
+capability→[roles]. Adding/removing roles is trivial (edit the map). But
+HYBRID roles (one person who is e.g. both farmaceutico AND bodega) don't fit
+— you'd have to create a combined role, which causes combinatorial explosion.
+
+Upgrade path when needed: flip to permission-centric model.
+
+
+user.roles becomes string[] (was string)
+map becomes ROLE_PRESETS: role→[capabilities] (named bundles)
+can(cap) checks if cap is in the UNION of the user's roles' presets
+Call sites (can('pos') on routes) DON'T change — only the helper resolution
+and the AuthPayload type. Contained refactor, not a rewrite, BECAUSE the
+logic is centralized. This is the payoff of the single-map design.
+
+
+Trigger: first time the client says "person X does two jobs."
  
+23. Doctor↔patient access model (DESIGNED, blocked on client policy)
+
+Status: 📐 Designed / blocked — needs client decision
+
+CURRENT BEHAVIOR: open — every clinical role (doctor/enfermera/recepcionista)
+sees every patient. getPatients returns all; getPatient returns any by id.
+No assignment/scoping exists.
+
+CLIENT CONTEXT (important for framing the question): today patient records are
+PAPER-ONLY. A doctor who wants a record must REQUEST it and have it sent. So
+their real-world model is request-based / gated access, not open access. When
+asking the client, frame it as: "replicate the controlled request-based access
+you have now, or open it up since digital makes sharing trivial?" — they may
+instinctively want to preserve controlled access.
+
+TWO MODELS:
+
+
+Open: any doctor sees any patient (simple, good for small cover-for-each-other
+clinics). Current behavior.
+Assignment: patients linked to one OR SEVERAL doctors (many-to-many); a doctor
+sees only their patients; admin/reception see all.
+
+
+IMPLEMENTATION IF ASSIGNMENT CHOSEN (clean, mirrors the inventory scope pattern
+we already built and proved):
+
+
+New doctor_patients join table (doctor_id, patient_id) — many-to-many.
+Patient queries gain a scope filter: WHERE patient is assigned to req.user
+(for doctors) OR req.user is admin/recepcionista (see all). Same
+filter-in-query approach as inventory scope — disallowed rows never leave the
+DB. Single-patient endpoints get a guard like scopeGuardOk → 404 on
+unassigned (no existence leak).
+This is the SAME pattern as inventory dual-scope, so it's well-understood work.
+
+
+DO NOT build until client answers. Building the wrong model is harmful either
+way (doctors can't see needed patients, OR compliance gap).
+
+24. Persist last route across refresh (with role validation)
+
+Status: 💡 Idea — UX nicety, do properly later
+
+Currently refresh resets to a default path. Nicer: remember the screen the user
+was on (persist currentPath to localStorage, restore on load). CATCH: must
+validate the restored path against the current role before restoring — a stored
+'/inventario' from a previous session/role must NOT drop a doctor onto a
+forbidden page. Restore saved path ONLY IF role is allowed to see it, else
+fall back to '/'. Tie the allowed-path check to the same role→page map used by
+the renderPage guard (item 25) so there's one source of truth.
+
+25. Proper route guarding / React Router migration
+
+Status: 💡 Idea — partially mitigated now, full fix in Phase 5
+
+App uses a hand-rolled state router (currentPath + switch in App.tsx), not React
+Router. A real router gives URL handling, refresh persistence, and declarative
+route guards for free. Phase 5 migration item. For now we added: (a) default
+path '/' instead of '/inventario', (b) a renderPage role-guard that redirects
+forbidden paths to '/' (belt-and-suspenders; sidebar already hides links and
+backend 403s data). When migrating to React Router, fold these into proper
+route guards and retire the manual checks.
+
+26. Dashboard / page error toasts on 403 (minor polish)
+
+Status: 💡 Idea — low priority
+With RBAC live, if a role ever does reach a forbidden page (or a stale fetch
+fires), the page shows "Error al cargar ...". Mostly prevented now by sidebar
+hiding + renderPage guard + capability-gated dashboard fetches. But individual
+pages could distinguish 403 ("no access") from real errors and show a cleaner
+"no tiene acceso" state instead of a generic load error. Cosmetic.
+
+
+27. Categories are not scope-aware (data hygiene / UX)
+
+Status: 💡 Idea — design decision, possibly needs client input. NOT a security issue.
+
+The category list (cleaning, consumables, equipment, medication, office supplies)
+is global — shown for both pharmacy and hospital items. So a pharmacy item can be
+filed under "office supplies" and a hospital item under "medication". Categories
+are cosmetic (the scope column enforces the real boundary; categories never
+gate access), so this is data hygiene + UX polish, not a vulnerability.
+
+Three options:
+
+
+Global categories (current) — loose, allows nonsensical pairings.
+Scope-scoped categories — each category belongs to a scope; create form only
+shows categories matching the chosen scope. Cleaner, more structure.
+Treat categories as free labels, don't care.
+
+
+Open question for client: what categories do they actually use per inventory
+(pharmacy vs hospital)? The listed ones may be placeholder/mockup seed data, not
+real client categories — confirm before investing in option 2.
+
+Defer until client confirms their real category taxonomy.
+
+28. JWT hardening (scoped — next security session)
+
+Status: 📐 Scoped / not started — the last item from the security pass
+
+The whole auth system rests on JWT_SECRET. Currently the secret is the literal
+'clinic_super_secret_change_this_in_production_2024' and tokens can't be revoked
+before natural expiry. Four pieces, roughly in order:
+
+
+CHANGE JWT_SECRET to a strong random value (trivial; invalidates all live
+tokens, so do it deliberately — everyone re-logs in). Pure win, no design
+needed. Could even be done standalone before the rest.
+TOKEN REVOCATION — the real design decision. Need: a fired/disabled employee's
+token must stop working immediately, not at expiry. Options to weigh:
+
+token_version: int column on users, embedded in the JWT; bump it to
+invalidate all that user's tokens. Simple, one extra check per auth, no
+storage. Good default for a single-clinic system.
+short access token + refresh token: industry standard, limits blast radius,
+but more moving parts (refresh endpoint, rotation, storage).
+revocation blocklist: most flexible, needs a store (Redis/db).
+Lean: token_version for this system's scale. Decide fresh.
+
+
+
+SHORTER EXPIRY paired with refresh (if we go that route) to limit how long a
+leaked token is usable. Current expiry is long-ish.
+PRODUCTION NOTES: secret via env (never committed); if the app ever scales to
+multiple backend instances, both rate-limiting AND token revocation need a
+shared store (Redis) instead of in-memory/per-instance. Phase 5.
+
+
+Why deferred: revocation is a genuine architecture choice, not a quick fix —
+deserves a fresh head, not the tail of a marathon session.
+
 ## Resolved
  
 Items completed, with a brief note for historical reference.
@@ -304,6 +460,22 @@ Was destructured but never used. Removed deliberately rather than left as a plac
 Initially looked like a bug (empty `category_id` → "Categoría inválida" error), but on discussion this is correct behavior — category is intentionally required. No fix needed, just confirmed as intentional.
 
 ### ✅ Lot-based inventory restructure + Pharmacy POS core (June 17–19, 2026)
+
+Replaced flat per-product stock with per-lot tracking (migration 05): each lot
+has its own expiry + cost; product total is computed (SUM of lots), never
+stored. Built the POS data layer (migration 06: sales/sale_items/payments) and
+the is_exempt flag (07). POS sale engine: atomic createSale with server-side
+FEFO multi-lot splitting, FOR UPDATE oversell protection, per-line ISV,
+SaleError→400 on insufficient stock/underpayment, in-memory receipt (no
+post-commit read-back — fixed a bug where a committed sale could report failure
+via a stale read query using a nonexistent u.name column). Verified end-to-end
+incl. both rollback paths. POS cashier frontend (PosPage + CheckoutModal) and a
+fully lot-aware Inventario rebuild. Fiscal columns are SHAPE-ONLY, blocked on
+client CAI. Several bugs squashed along the way: StrictMode double-toast
+(side-effect in setState updater), negative stock (no floor check on
+subtraction), numeric-string coercion on edit, empty-string UUID rejection.
+
+Lot-based inventory restructure + Pharmacy POS core (June 17–19, 2026)
 
 Replaced flat per-product stock with per-lot tracking (migration 05): each lot
 has its own expiry + cost; product total is computed (SUM of lots), never

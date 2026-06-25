@@ -795,3 +795,102 @@ bug (19). See backlog for all.
 Two client blockers unchanged: CAI/SAR details, scanner/printer models.
 
  Pharmacy POS: Phase 4 (Laboratory, Communications/internal messaging, Reports & Exports), then Phase 5 (production hardening — HTTPS, Redis-backed rate limiting, PM2, encryption at rest, SAR compliance review).
+
+
+### Docs Update — RBAC, Dual-Scope Inventory, Security (June 25, 2026)
+
+
+Merge into clinic-system-docs.md. Architecture reference for the access
+control and inventory-scope systems built this session.
+
+
+
+Dual-Scope Inventory
+
+The system runs two operationally separate inventories through ONE schema:
+
+
+pharmacy scope — medicines; sellable via the POS.
+hospital scope — equipment, supplies, the ward's own medicines;
+stock-tracked (receive/consume/adjust/expiry) but NEVER sold.
+
+
+inventory_items.scope (varchar, NOT NULL, default 'pharmacy', CHECK in
+('pharmacy','hospital')) carries this. Scope is custody-based: it means who
+manages the stock, not what the item is. The ward's own amoxicillin is
+hospital scope (the ward manages it) even though it's medicine.
+
+Why one table, not two: a mop and a medicine are the same shape of data
+(item + lots + movements + expiry). Duplicating the schema would duplicate all
+the lot/POS/movement machinery. The scope column + RBAC enforce the boundary
+instead. Reusing everything; the POS simply refuses non-pharmacy items.
+
+Roles (6)
+
+admin, doctor, recepcionista, enfermera, farmaceutico, bodega
+(user_role enum). farmaceutico = pharmacy POS + pharmacy stock. bodega =
+hospital-scope inventory (placeholder until client confirms such a person).
+
+RBAC architecture
+
+Single source of truth: config/permissions.ts — a flat map of
+capability → allowed roles. To change access, edit one array. Capabilities:
+pos, inventory_any, inventory_pharmacy, inventory_hospital,
+appointments, patients, medical_records.
+
+Two enforcement layers:
+
+
+Module gate — can(capability) middleware on route groups reads the map.
+Wrong role → 403 before the controller runs.
+Scope guard (inventory only) — within the inventory module, a per-item
+check (scopeGuardOk in the controller) verifies the item's scope is one the
+caller's role may touch. List endpoints filter in-SQL by allowed scopes
+(disallowed rows never leave the DB). Single-item endpoints return 404
+(not 403) on scope mismatch — deliberately, so a forbidden item is
+indistinguishable from a nonexistent one (no existence leak).
+
+
+inventory_any is the coarse "can reach the inventory module" gate (union of
+pharmacy+hospital roles); the per-scope capabilities drive what they actually
+see via allowedScopesForRole(role).
+
+Identity is never trusted from the client. Every "who did this" field is
+injected server-side from the auth token: cashier_id, medical-record doctor_id
+(forced to the logged-in doctor), cancelled_by, notification ownership.
+
+Frontend gating is cosmetic — sidebar hides forbidden links, dashboard gates
+widgets+fetches, App.tsx guards routes and defaults to '/'. The backend is the
+real enforcer (a hand-crafted request still gets 403/404). The frontend role
+lists duplicate the backend map; acceptable redundancy, backend wins on drift.
+
+POS money/stock integrity (verified by Audit #1)
+
+
+Prices read server-side from the product; the client never sends a price.
+No client-set total; computed from server values.
+Discount clamped: a discount exceeding the pre-discount total is rejected
+(prevents negative-total payment bypass).
+Payment verified: sum(payments) >= total enforced.
+FEFO lot selection with FOR UPDATE row locks — proven to serialize
+concurrent sales (no oversell race).
+Atomic transaction: any mid-sale failure rolls back all stock decrements.
+Stock is fractional numeric; never stored on the item, always SUM(lots).
+
+
+Rate limiting (3 tiers)
+
+
+General /api — 1000/15min, per-IP (runs before auth).
+Login — 5/15min, per-IP.
+Sensitive writes (inventory/appointments/pos) — 40/min, hybrid key
+(req.user?.userId ?? req.ip) so staff sharing one IP get separate buckets.
+Runs after authenticate.
+In-memory store (fine for single instance; needs Redis if multi-instance — P5).
+
+
+Error handling
+
+Global handler maps Postgres error codes to clean 4xx instead of 500:
+23505→409, 23503→400, 22P02→400, 23502→400, 23514→400, 22003→400.
+No stack traces or SQL reach the client.
