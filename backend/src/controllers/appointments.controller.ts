@@ -130,12 +130,17 @@ export const createAppointment = async (req: Request, res: Response) => {
 
 export const updateStatus = async (req: Request, res: Response) => {
   try {
-    const { status, cancelled_by, cancellation_reason, notes } = req.body;
+    const { status, cancellation_reason, notes } = req.body;
     if (!status) return res.status(400).json({ success: false, message: 'Estado es requerido.' });
     const appointment = await AppointmentsModel.updateAppointmentStatus(
       req.params.id as string,
       status,
-      { cancelled_by, cancellation_reason, notes }
+      {
+        // Who performed the cancellation comes from the token, never the body.
+        cancelled_by: status === 'cancelled' ? req.user!.userId : undefined,
+        cancellation_reason,
+        notes,
+      }
     );
     if (!appointment) return res.status(404).json({ success: false, message: 'Cita no encontrada.' });
     res.json({ success: true, data: appointment });
@@ -157,7 +162,13 @@ export const getNotifications = async (req: Request, res: Response) => {
 
 export const markRead = async (req: Request, res: Response) => {
   try {
-    await AppointmentsModel.markNotificationRead(req.params.id as string);
+    const affected = await AppointmentsModel.markNotificationRead(
+      req.params.id as string,
+      req.user!.userId
+    );
+    if (affected === 0) {
+      return res.status(404).json({ success: false, message: 'Notificación no encontrada.' });
+    }
     res.json({ success: true, message: 'Notificación marcada como leída.' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error al actualizar notificación.' });
@@ -176,23 +187,49 @@ export const getMedicalRecords = async (req: Request, res: Response) => {
   }
 };
 
-export const createMedicalRecord = async (req: Request, res: Response) => {
+export const createMedicalRecord = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { patient_id, doctor_id } = req.body;
-    if (!patient_id || !doctor_id) {
+    const { patient_id } = req.body;
+    if (!patient_id) {
       return res.status(400).json({
         success: false,
-        message: 'Paciente y médico son requeridos.'
+        message: 'El paciente es requerido.',
       });
     }
-    const record = await AppointmentsModel.createMedicalRecord(req.body);
+
+    // AUTHORSHIP: doctor_id is NOT trusted from the body (that let a
+    // receptionist forge a record in a doctor's name). Resolve it from the
+    // caller instead:
+    //  - If the caller is a doctor, force doctor_id to THEIR doctor record.
+    //  - If the caller is admin (not a doctor, no doctor_id of their own),
+    //    they must supply a valid doctor_id explicitly. Admin is the trusted
+    //    superuser, so this is acceptable; the can('medical_records') gate
+    //    already blocks everyone else.
+    let doctor_id: string | undefined;
+    const callerDoctor = await AppointmentsModel.getDoctorByUserId(req.user!.userId);
+    if (callerDoctor) {
+      doctor_id = callerDoctor.id; // forced — body value ignored
+    } else if (req.user!.role === 'admin') {
+      doctor_id = req.body.doctor_id; // admin must name the doctor
+    }
+
+    if (!doctor_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'No se pudo determinar el médico responsable del registro.',
+      });
+    }
+
+    const record = await AppointmentsModel.createMedicalRecord({
+      ...req.body,
+      doctor_id,
+    });
     res.status(201).json({ success: true, data: record });
   } catch (error) {
     console.error('CREATE MEDICAL RECORD ERROR:', error);
-    res.status(500).json({ success: false, message: 'Error al crear registro médico.' });
+    next(error);
   }
 };
-
 export const getAppointmentHistory = async (req: Request, res: Response) => {
   try {
     const history = await AppointmentsModel.getPatientAppointmentHistory(req.params.id as string);

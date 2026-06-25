@@ -73,9 +73,9 @@ export const createSale = async (data: CreateSaleDTO) => {
         throw new SaleError('Cantidad inválida en un producto.');
       }
 
-      // Read the product: authoritative price + exempt status.
+      // Read the product: authoritative price + exempt status + scope.
       const itemResult = await client.query(
-        `SELECT id, name, unit_price, is_exempt
+        `SELECT id, name, unit_price, is_exempt, scope
          FROM inventory_items
          WHERE id = $1 AND is_active = true`,
         [line.item_id]
@@ -83,6 +83,12 @@ export const createSale = async (data: CreateSaleDTO) => {
       const item = itemResult.rows[0];
       if (!item) {
         throw new SaleError('Producto no encontrado o inactivo.');
+      }
+      // Only pharmacy-scope items are sellable. Hospital-scope stock
+      // (equipment, ward supplies) can never be rung up, even if its id is
+      // forced into the cart by a hand-crafted request.
+      if (item.scope !== 'pharmacy') {
+        throw new SaleError('Este producto no se puede vender en el punto de venta.');
       }
       const unitPrice = Number(item.unit_price);
       const isExempt = item.is_exempt;
@@ -165,7 +171,19 @@ export const createSale = async (data: CreateSaleDTO) => {
     isvGravable = +isvGravable.toFixed(2);
     isvExento = +isvExento.toFixed(2);
     isvAmount = +isvAmount.toFixed(2);
-    const total = +(subtotal + isvAmount - discount).toFixed(2);
+
+    // SECURITY: a discount must never exceed the pre-discount total, or the
+    // sale total goes negative — and since the payment check below is
+    // (paid < total), a negative total makes ANY payment (even 0) "cover" it.
+    // That let a crafted request ring up stock, pay nothing, and record the
+    // store as OWING money. A discount larger than the sale is never valid →
+    // reject it outright rather than silently clamp (surfaces client bugs/abuse).
+    const preDiscountTotal = +(subtotal + isvAmount).toFixed(2);
+    if (discount > preDiscountTotal) {
+      throw new SaleError('El descuento no puede ser mayor que el total de la venta.');
+    }
+
+    const total = +(preDiscountTotal - discount).toFixed(2);
 
     // --- Validate payments cover the total ---
     const paid = data.payments.reduce((sum, p) => sum + Number(p.amount), 0);

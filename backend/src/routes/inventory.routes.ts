@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as InventoryController from '../controllers/inventory.controller';
 import { validate } from '../middleware/validate.middleware';
+import { can } from '../middleware/auth.middleware';
 import {
   CreateItemSchema,
   UpdateItemSchema,
@@ -10,10 +11,13 @@ import {
 
 const router = Router();
 
+// Module-level gate: must have inventory access (pharmacy OR hospital).
+// Per-item / per-list scope filtering happens in the controller.
+router.use(can('inventory_any'));
+
 router.get('/categories', InventoryController.getCategories);
 router.get('/suppliers', InventoryController.getSuppliers);
 router.get('/low-stock', InventoryController.getLowStock);
-
 router.get('/', InventoryController.getItems);
 router.get('/:id', InventoryController.getItem);
 router.post('/', validate(CreateItemSchema), InventoryController.createItem);

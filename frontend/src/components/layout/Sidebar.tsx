@@ -5,15 +5,19 @@ interface NavItem {
   label: string;
   path: string;
   icon: string;
+  // Roles allowed to SEE this nav item. Mirrors the backend permissions
+  // map — this is cosmetic (backend enforces the real boundary), but keeps
+  // the UI honest. If a role isn't listed, the link is hidden for them.
+  roles: string[];
 }
 
 const navItems: NavItem[] = [
-  { label: 'Inicio', path: '/', icon: '🏥' },
-  { label: 'Punto de Venta', path: '/pos', icon: '🛒' },
-  { label: 'Inventario', path: '/inventario', icon: '📦' },
-  { label: 'Citas', path: '/citas', icon: '📅' },
-  { label: 'Pacientes', path: '/pacientes', icon: '👤' },
-  { label: 'Comunicaciones', path: '/comunicaciones', icon: '✉️' },
+  { label: 'Inicio', path: '/', icon: '🏥', roles: ['admin', 'doctor', 'recepcionista', 'enfermera', 'farmaceutico', 'bodega'] },
+  { label: 'Punto de Venta', path: '/pos', icon: '🛒', roles: ['admin', 'farmaceutico', 'recepcionista'] },
+  { label: 'Inventario', path: '/inventario', icon: '📦', roles: ['admin', 'farmaceutico', 'recepcionista', 'bodega'] },
+  { label: 'Citas', path: '/citas', icon: '📅', roles: ['admin', 'doctor', 'recepcionista', 'enfermera'] },
+  { label: 'Pacientes', path: '/pacientes', icon: '👤', roles: ['admin', 'doctor', 'recepcionista', 'enfermera'] },
+  { label: 'Comunicaciones', path: '/comunicaciones', icon: '✉️', roles: ['admin', 'doctor', 'recepcionista', 'enfermera', 'farmaceutico', 'bodega'] },
 ];
 
 const roleLabels: Record<string, string> = {
@@ -21,6 +25,8 @@ const roleLabels: Record<string, string> = {
   doctor: 'Doctor',
   recepcionista: 'Recepcionista',
   enfermera: 'Enfermera',
+  farmaceutico: 'Farmacéutico',
+  bodega: 'Bodega',
 };
 
 interface SidebarProps {
@@ -33,6 +39,9 @@ interface SidebarProps {
 
 export const Sidebar = ({ currentPath, onNavigate, user, onLogout, unreadCount }: SidebarProps) => {
   const [collapsed, setCollapsed] = useState(false);
+
+  // Only show nav items this role is allowed to see.
+  const visibleItems = navItems.filter(item => item.roles.includes(user.role));
 
   return (
     <aside className={`
@@ -54,26 +63,26 @@ export const Sidebar = ({ currentPath, onNavigate, user, onLogout, unreadCount }
 
       {/* Nav items */}
       <nav className="flex-1 py-4">
-        {navItems.map(item => (
+        {visibleItems.map(item => (
           <button
-  key={item.path}
-  onClick={() => onNavigate(item.path)}
-  className={`
-    w-full flex items-center gap-3 px-4 py-3 text-left
-    transition-colors hover:bg-slate-700
-    ${currentPath === item.path ? 'bg-slate-700 border-r-2 border-blue-400' : ''}
-  `}
->
-  <span className="text-xl">{item.icon}</span>
-  {!collapsed && (
-    <span className="flex-1 text-sm font-medium">{item.label}</span>
-  )}
-  {!collapsed && item.path === '/citas' && unreadCount > 0 && (
-    <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-      {unreadCount}
-    </span>
-  )}
-</button>
+            key={item.path}
+            onClick={() => onNavigate(item.path)}
+            className={`
+              w-full flex items-center gap-3 px-4 py-3 text-left
+              transition-colors hover:bg-slate-700
+              ${currentPath === item.path ? 'bg-slate-700 border-r-2 border-blue-400' : ''}
+            `}
+          >
+            <span className="text-xl">{item.icon}</span>
+            {!collapsed && (
+              <span className="flex-1 text-sm font-medium">{item.label}</span>
+            )}
+            {!collapsed && item.path === '/citas' && unreadCount > 0 && (
+              <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                {unreadCount}
+              </span>
+            )}
+          </button>
         ))}
       </nav>
 

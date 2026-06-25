@@ -318,11 +318,18 @@ export const getDoctorNotifications = async (userId: string) => {
   return result.rows;
 };
 
-export const markNotificationRead = async (id: string) => {
-  await pool.query(
-    `UPDATE appointment_notifications SET is_sent = true WHERE id = $1`,
-    [id]
+// Ownership-scoped: only marks the notification read if it belongs to the
+// caller (recipient_user_id = userId). Marking someone else's notification
+// simply affects zero rows — no error, no effect. Returns the affected
+// rowcount so the controller could 404 if desired.
+export const markNotificationRead = async (id: string, userId: string) => {
+  const result = await pool.query(
+    `UPDATE appointment_notifications
+     SET is_sent = true
+     WHERE id = $1 AND recipient_user_id = $2`,
+    [id, userId]
   );
+  return result.rowCount ?? 0;
 };
 
 // ── MEDICAL RECORDS ───────────────────────────────────────────────────────────
@@ -340,6 +347,17 @@ export const getPatientMedicalRecords = async (patientId: string) => {
     ORDER BY m.visit_date DESC
   `, [patientId]);
   return result.rows;
+};
+
+// Resolve the doctor row for a given user (or null if the user isn't a doctor).
+// Used to force a medical record's author to the logged-in doctor, so the
+// author can't be spoofed via the request body.
+export const getDoctorByUserId = async (userId: string) => {
+  const result = await pool.query(
+    `SELECT id FROM doctors WHERE user_id = $1`,
+    [userId]
+  );
+  return result.rows[0] || null;
 };
 
 export const createMedicalRecord = async (data: {

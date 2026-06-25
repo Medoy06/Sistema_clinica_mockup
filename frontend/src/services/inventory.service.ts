@@ -65,6 +65,7 @@ export interface CreateItemData {
   unit_price?: number;
   location?: string;
   is_exempt?: boolean;
+  scope?: 'pharmacy' | 'hospital';
 }
 
 export interface CreateLotData {

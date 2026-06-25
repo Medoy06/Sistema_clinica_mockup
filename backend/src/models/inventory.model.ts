@@ -72,7 +72,10 @@ export interface StockTransactionDTO {
 // --- ITEM QUERIES ---
 // Total stock is computed from lots, never stored. COALESCE guards the
 // zero-lot case (SUM of no rows is NULL, which we surface as 0).
-export const getAllItems = async () => {
+// scopes: the inventory scopes the caller is allowed to see (RBAC). The
+// query only returns items whose scope is in that list — enforced in SQL,
+// so disallowed rows never leave the database.
+export const getAllItems = async (scopes: string[]) => {
   const result = await pool.query(`
     SELECT
       i.*,
@@ -83,11 +86,21 @@ export const getAllItems = async () => {
     LEFT JOIN categories c ON i.category_id = c.id
     LEFT JOIN suppliers s ON i.supplier_id = s.id
     LEFT JOIN inventory_lots l ON l.item_id = i.id
-    WHERE i.is_active = true
+    WHERE i.is_active = true AND i.scope = ANY($1)
     GROUP BY i.id, c.name, s.name
     ORDER BY i.name ASC
-  `);
+  `, [scopes]);
   return result.rows;
+};
+
+// Returns just the scope of an item (or null if not found). Used by the
+// controller scope-guard before any single-item read/write.
+export const getItemScope = async (id: string): Promise<string | null> => {
+  const result = await pool.query(
+    `SELECT scope FROM inventory_items WHERE id = $1`,
+    [id]
+  );
+  return result.rows[0]?.scope ?? null;
 };
 
 export const getItemById = async (id: string) => {
@@ -109,7 +122,8 @@ export const getItemById = async (id: string) => {
 
 // Low stock: computed total vs min_quantity. The aggregate condition must
 // live in HAVING (runs after GROUP BY), not WHERE (runs before grouping).
-export const getLowStockItems = async () => {
+// Scope-filtered like getAllItems.
+export const getLowStockItems = async (scopes: string[]) => {
   const result = await pool.query(`
     SELECT
       i.*,
@@ -118,28 +132,30 @@ export const getLowStockItems = async () => {
     FROM inventory_items i
     LEFT JOIN categories c ON i.category_id = c.id
     LEFT JOIN inventory_lots l ON l.item_id = i.id
-    WHERE i.is_active = true
+    WHERE i.is_active = true AND i.scope = ANY($1)
     GROUP BY i.id, c.name
     HAVING COALESCE(SUM(l.quantity) FILTER (WHERE l.is_active = true), 0) <= i.min_quantity
     ORDER BY quantity ASC
-  `);
+  `, [scopes]);
   return result.rows;
 };
 
 // Creating a product now = product identity only. Stock arrives separately
 // as lots (see createLot). No quantity/expiry here anymore.
-export const createItem = async (data: CreateItemDTO) => {
+// scope ('pharmacy' | 'hospital') is validated against the caller's role in
+// the controller before this runs.
+export const createItem = async (data: CreateItemDTO & { scope: string }) => {
   const result = await pool.query(`
     INSERT INTO inventory_items (
       name, description, category_id, supplier_id,
-      unit, min_quantity, max_quantity, unit_price, location
+      unit, min_quantity, max_quantity, unit_price, location, scope
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
     ) RETURNING *
   `, [
     data.name, data.description, data.category_id, data.supplier_id,
     data.unit, data.min_quantity, data.max_quantity,
-    data.unit_price, data.location,
+    data.unit_price, data.location, data.scope,
   ]);
   return result.rows[0];
 };

@@ -7,6 +7,19 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { EditItemModal } from '../../components/ui/EditItemModal';
 import { TransactionModal } from '../../components/ui/TransactionModal';
 import { LotsModal } from '../../components/ui/LotsModal';
+import { useAuth } from '../../context/AuthContext';
+
+const scopesForRole = (role?: string): ('pharmacy' | 'hospital')[] => {
+  const s: ('pharmacy' | 'hospital')[] = [];
+  if (['admin', 'farmaceutico', 'recepcionista'].includes(role ?? '')) s.push('pharmacy');
+  if (['admin', 'bodega'].includes(role ?? '')) s.push('hospital');
+  return s;
+};
+
+const scopeLabels: Record<'pharmacy' | 'hospital', string> = {
+  pharmacy: 'Farmacia',
+  hospital: 'Hospital',
+};
 
 export const InventoryPage = () => {
   const {
@@ -14,6 +27,8 @@ export const InventoryPage = () => {
     createItem, updateItem, deleteItem, createLot, addTransaction, refetch,
   } = useInventory();
 
+  const { user } = useAuth();
+  const allowedScopes = scopesForRole(user?.role);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -34,6 +49,7 @@ export const InventoryPage = () => {
     unit_price: 0,
     location: '',
     is_exempt: false,
+    scope: 'pharmacy' as 'pharmacy' | 'hospital',
     // initial lot
     lot_number: '',
     expiry_date: '',
@@ -44,6 +60,7 @@ export const InventoryPage = () => {
   const resetForm = () => setForm({
     name: '', description: '', category_id: '', unit: '',
     min_quantity: 0, unit_price: 0, location: '', is_exempt: false,
+    scope: 'pharmacy',
     lot_number: '', expiry_date: '', lot_quantity: 0, unit_cost: 0,
   });
 
@@ -74,6 +91,7 @@ export const InventoryPage = () => {
         unit_price: form.unit_price || undefined,
         location: form.location || undefined,
         is_exempt: form.is_exempt,
+        scope: allowedScopes.length === 1 ? allowedScopes[0] : form.scope,
       });
 
       // Create the initial lot only if a starting quantity was entered.
@@ -237,6 +255,20 @@ export const InventoryPage = () => {
                 ))}
               </select>
             </div>
+            {allowedScopes.length > 1 && (
+              <div>
+                <label className="text-sm text-slate-600 block mb-1">Ámbito *</label>
+                <select
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={form.scope}
+                  onChange={e => setForm({ ...form, scope: e.target.value as 'pharmacy' | 'hospital' })}
+                >
+                  {allowedScopes.map(sc => (
+                    <option key={sc} value={sc}>{scopeLabels[sc]}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="text-sm text-slate-600 block mb-1">Unidad *</label>
               <input
